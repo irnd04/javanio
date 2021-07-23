@@ -3,7 +3,10 @@ package org.example.socket.nonblocking;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
-import java.nio.channels.*;
+import java.nio.channels.SelectionKey;
+import java.nio.channels.Selector;
+import java.nio.channels.ServerSocketChannel;
+import java.nio.channels.SocketChannel;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -27,13 +30,14 @@ public class ServerExample {
 
         ScheduledExecutorService scheduledExecutorService = Executors.newScheduledThreadPool(1);
         scheduledExecutorService.scheduleWithFixedDelay(() -> {
-            for (SocketChannel channel : socketChannels) {
-                try {
+            try {
+                for (SocketChannel channel : socketChannels) {
                     ByteBuffer buffer = StandardCharsets.UTF_8.encode("Hello, Client");
-                    channel.register(selector, SelectionKey.OP_WRITE, buffer);
-                } catch (ClosedChannelException e) {
-                    e.printStackTrace();
+                    SelectionKey selectionKey = channel.keyFor(selector);
+                    selectionKey.interestOps(SelectionKey.OP_WRITE);
+                    selectionKey.attach(buffer);
                 }
+            } catch (Exception ignored) {
             }
         }, 0, 5, TimeUnit.SECONDS);
 
@@ -70,11 +74,10 @@ public class ServerExample {
                 } else if (selectionKey.isWritable()) {
                     SocketChannel socketChannel = (SocketChannel) selectionKey.channel();
                     try {
-                        selectionKey.interestOps();
                         System.out.println("notify " + socketChannel.getRemoteAddress());
                         ByteBuffer buffer = (ByteBuffer) selectionKey.attachment();
                         int write = socketChannel.write(buffer);
-                        socketChannel.register(selector, SelectionKey.OP_READ);
+                        selectionKey.interestOps(SelectionKey.OP_READ);
                     } catch (Exception e) {
                         e.printStackTrace();
                         socketChannels.remove(socketChannel);
